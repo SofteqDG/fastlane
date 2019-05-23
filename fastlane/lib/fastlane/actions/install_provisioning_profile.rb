@@ -2,10 +2,33 @@ require 'shellwords'
 
 module Fastlane
   module Actions
+    module SharedValues
+      PROVISIONING_PROFILE_NAME = :PROVISIONING_PROFILE_NAME
+      PROVISIONING_PROFILE_UUID = :PROVISIONING_PROFILE_UUID
+      PROVISIONING_PROFILE_TEAM_ID = :PROVISIONING_PROFILE_TEAM_ID
+    end
+
     class InstallProvisioningProfileAction < Action
       def self.run(params)
+        # Install provisioning profile
         absolute_path = File.expand_path(params[:path])
-        FastlaneCore::ProvisioningProfile.install(absolute_path)
+        installed_profile_path = FastlaneCore::ProvisioningProfile.install(absolute_path)
+
+        # Parse installed provisioning profile
+        if File.exist?(installed_profile_path)
+          profile_hash = FastlaneCore::ProvisioningProfile.parse(installed_profile_path)
+
+          profile_name = profile_hash.fetch("Name")
+          Actions.lane_context[SharedValues::PROVISIONING_PROFILE_NAME] = profile_name
+
+          profile_uuid = profile_hash.fetch("UUID")
+          Actions.lane_context[SharedValues::PROVISIONING_PROFILE_UUID] = profile_uuid
+
+          profile_team_id = profile_hash.fetch("Entitlements").fetch("com.apple.developer.team-identifier")
+          Actions.lane_context[SharedValues::PROVISIONING_PROFILE_TEAM_ID] = profile_team_id
+        end
+
+        return installed_profile_path
       end
 
       def self.description
@@ -41,6 +64,14 @@ module Fastlane
                                   UI.user_error!("Could not find provisioning profile at path: '#{value}'")
                                 end
                               end)
+        ]
+      end
+
+      def self.output
+        [
+          ['PROVISIONING_PROFILE_NAME', 'Name of the installed provisioning profile'],
+          ['PROVISIONING_PROFILE_UUID', 'Identifier (UUID) of the installed provisioning profile'],
+          ['PROVISIONING_PROFILE_TEAM_ID', 'The team ID of a development team to use for installed provisioning profile']
         ]
       end
 
